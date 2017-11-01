@@ -28,7 +28,7 @@ class FreeRex(Optimizer):
                 state['beta'] = p.data.new().resize_as_(p.data).zero_()
                 state['scaling'] = p.data.new().resize_as_(p.data).fill_(1.0)
                 state['max_grad'] = p.data.new().resize_as_(p.data).fill_(EPSILON)
-                state['max_l1'] = EPSILON
+                state['max_l2'] = EPSILON
 
     def step(self, closure=None):
         """Performs a single optimization step.
