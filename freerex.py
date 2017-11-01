@@ -29,6 +29,7 @@ class FreeRex(Optimizer):
                 state['scaling'] = 1.0#p.data.new().resize_as_(p.data).fill_(1.0)
                 state['max_grad'] = p.data.new().resize_as_(p.data).fill_(EPSILON)
                 state['max_l2'] = EPSILON
+                state['center'] = p.data.clone()
 
     def step(self, closure=None):
         """Performs a single optimization step.
@@ -92,6 +93,6 @@ class FreeRex(Optimizer):
 
                     state['one_over_eta_sq'] = torch.max(state['one_over_eta_sq'] + 2*grad.pow(2), state['max_grad'] * torch.abs(state['grad_sum']))
 
-                    p.data = -torch.sign(state['grad_sum']) * (torch.exp(torch.abs(state['grad_sum'])*group['lr']/(torch.sqrt(state['one_over_eta_sq']))) - 1.0) * state['scaling']#/np.sqrt(state['max_l1'])
+                    p.data = state['center']-torch.sign(state['grad_sum']) * (torch.exp(torch.abs(state['grad_sum'])*group['lr']/(torch.sqrt(state['one_over_eta_sq']))) - 1.0) * state['scaling']#/np.sqrt(state['max_l1'])
 
         return loss
