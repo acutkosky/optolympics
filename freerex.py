@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 from torch.optim import Optimizer
-import sparseops
 
 EPSILON = 1e-8
 
