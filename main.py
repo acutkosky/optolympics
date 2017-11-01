@@ -2,6 +2,7 @@ import argparse
 import os
 import shutil
 import time
+import freerex
 
 import torch
 import torch.nn as nn
@@ -18,6 +19,12 @@ import torchvision.models as models
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(models.__dict__[name]))
+
+optimizer_names = [
+    'SGD',
+    'FreeRex',
+    'Adam'
+]
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
@@ -59,9 +66,27 @@ parser.add_argument('-d', '--decay', default=30, type=int, metavar='N',
                     help='decay learning rate by 10x after this many epochs')
 parser.add_argument('-g', '--gpuid', action='append', type=int, metavar='N',
                     help='restrict use to a given gpu devices (default is all of them)')
+parser.add_argument('-o', '--optimizer', default='SGD', 
+    choices=optimizer_names,
+    help='optimizer: '+ ' | '.join(optimizer_names) + ' (default: SGD)')
 
 best_prec1 = 0
 
+def get_optimizer(model, args):
+    if args.optimizer == 'SGD':
+        optimizer = torch.optim.SGD(model.parameters(), args.lr,
+                                momentum=args.momentum,
+                                weight_decay=args.weight_decay)
+
+    if args.optimizer == 'Adam':
+        optimizer = torch.optim.Adam(model.parameters(), args.lr,
+                                weight_decay=args.weight_decay)
+
+    if args.optimizer == 'FreeRex':
+        optimizer = freerex.FreeRex(model.parameters(), args.lr,
+                                weight_decay=args.weight_decay)
+
+    return optimizer
 
 def main():
     global args, best_prec1
@@ -99,9 +124,7 @@ def main():
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
 
-    optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
+    optimizer = get_optimizer(model, args)
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -299,9 +322,10 @@ class AverageMeter(object):
 
 def adjust_learning_rate(optimizer, epoch, decay):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = args.lr * (0.1 ** (epoch // decay))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+    if decay!=0:
+        lr = args.lr * (0.1 ** (epoch // decay))
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
 
 
 def accuracy(output, target, topk=(1,)):
