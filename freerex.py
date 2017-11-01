@@ -26,7 +26,7 @@ class FreeRex(Optimizer):
                 state['one_over_eta_sq'] = p.data.new().resize_as_(p.data).fill_(EPSILON)
                 state['grad_sum'] = p.data.new().resize_as_(p.data).zero_()
                 state['beta'] = p.data.new().resize_as_(p.data).zero_()
-                state['scaling'] = p.data.new().resize_as_(p.data).fill_(EPSILON)
+                state['scaling'] = p.data.new().resize_as_(p.data).fill_(1.0)
                 state['max_grad'] = p.data.new().resize_as_(p.data).fill_(EPSILON)
                 state['max_l1'] = EPSILON
 
@@ -84,12 +84,14 @@ class FreeRex(Optimizer):
                 else:
                     state['max_grad'] = torch.max(state['max_grad'], torch.abs(grad))
 
-                    state['max_l1'] = max(state['max_l1'], grad.norm(1))
+                    state['max_l2'] = max(state['max_l2'], grad.norm(2))
+
+                    state['scaling'] = torch.min(state['scaling'], state['max_l2']/torch.sum(state['max_grad']))
 
                     state['grad_sum'].add_(grad)
 
                     state['one_over_eta_sq'] = torch.max(state['one_over_eta_sq'] + 2*grad.pow(2), state['max_grad'] * torch.abs(state['grad_sum']))
 
-                    p.data = -torch.sign(state['grad_sum']) * (torch.exp(torch.abs(state['grad_sum'])*group['lr']/(torch.sqrt(state['one_over_eta_sq']))) - 1.0)/np.sqrt(state['max_l1'])
+                    p.data = -torch.sign(state['grad_sum']) * (torch.exp(torch.abs(state['grad_sum'])*group['lr']/(torch.sqrt(state['one_over_eta_sq']))) - 1.0) * state['scaling']#/np.sqrt(state['max_l1'])
 
         return loss
