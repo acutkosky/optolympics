@@ -86,7 +86,7 @@ class FreeRex(Optimizer):
 
                     state['max_l2'] = max(state['max_l2'], grad.norm(2))
 
-                    state['scaling'] = torch.min(state['scaling'], state['max_l2']/torch.sum(state['max_grad']))
+                    state['scaling'] = torch.min(state['scaling'], torch.FloatTensor([state['max_l2']/torch.sum(state['max_grad'])]))
 
                     state['grad_sum'].add_(grad)
 
