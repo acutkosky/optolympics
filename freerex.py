@@ -26,7 +26,7 @@ class FreeRex(Optimizer):
                 state['one_over_eta_sq'] = p.data.new().resize_as_(p.data).fill_(EPSILON)
                 state['grad_sum'] = p.data.new().resize_as_(p.data).zero_()
                 state['beta'] = p.data.new().resize_as_(p.data).zero_()
-                state['scaling'] = p.data.new().resize_as_(p.data).fill_(1.0)
+                state['scaling'] = 1.0#p.data.new().resize_as_(p.data).fill_(1.0)
                 state['max_grad'] = p.data.new().resize_as_(p.data).fill_(EPSILON)
                 state['max_l2'] = EPSILON
 
@@ -86,7 +86,7 @@ class FreeRex(Optimizer):
 
                     state['max_l2'] = max(state['max_l2'], grad.norm(2))
 
-                    state['scaling'] = torch.min(state['scaling'], torch.FloatTensor([state['max_l2']/torch.sum(state['max_grad'])]))
+                    state['scaling'] = min(state['scaling'], state['max_l2']/torch.sum(state['max_grad']))
 
                     state['grad_sum'].add_(grad)
 
