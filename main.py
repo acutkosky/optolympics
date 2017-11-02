@@ -25,7 +25,7 @@ optimizer_names = [
     'FreeRexSphere',
     'FreeRex',
     'FreeRexMD',
-    'FreeRexSphereMD'
+    'FreeRexSphereMD',
     'Adam'
 ]
 
