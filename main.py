@@ -22,6 +22,7 @@ model_names = sorted(name for name in models.__dict__
 
 optimizer_names = [
     'SGD',
+    'FreeRexSphere',
     'FreeRex',
     'Adam'
 ]
@@ -80,6 +81,10 @@ def get_optimizer(model, args):
 
     if args.optimizer == 'Adam':
         optimizer = torch.optim.Adam(model.parameters(), args.lr,
+                                weight_decay=args.weight_decay)
+
+    if args.optimizer == 'FreeRexSphere':
+        optimizer = freerex.FreeRexSphere(model.parameters(), args.lr,
                                 weight_decay=args.weight_decay)
 
     if args.optimizer == 'FreeRex':
