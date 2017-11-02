@@ -25,6 +25,7 @@ optimizer_names = [
     'FreeRexSphere',
     'FreeRex',
     'FreeRexMD',
+    'FreeRexSphereMD'
     'Adam'
 ]
 
@@ -98,6 +99,10 @@ def get_optimizer(model, args):
 
     if args.optimizer == 'FreeRexMD':
         optimizer = freerex.FreeRexMD(model.parameters(), args.lr,
+                                weight_decay=args.weight_decay)
+
+    if args.optimizer == 'FreeRexSphereMD':
+        optimizer = freerex.FreeRexSphereMD(model.parameters(), args.lr,
                                 weight_decay=args.weight_decay)
 
     return optimizer
