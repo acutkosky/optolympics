@@ -109,8 +109,8 @@ class FreeRexSphere(Optimizer):
         weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
     """
 
-    def __init__(self, params, lr=1.0/np.sqrt(5.0), weight_decay=0):
-        defaults = dict(lr=lr, weight_decay=weight_decay)
+    def __init__(self, params, lr=1.0/np.sqrt(5.0), weight_decay=0, momentum=False):
+        defaults = dict(lr=lr, weight_decay=weight_decay, momentum=momentum)
         super(FreeRexSphere, self).__init__(params, defaults)
 
         for group in self.param_groups:
@@ -124,6 +124,7 @@ class FreeRexSphere(Optimizer):
                 state['max_grad'] = EPSILON#p.data.new().resize_as_(p.data).fill_(EPSILON)
                 # state['max_l2'] = EPSILON
                 state['center'] = p.data.clone()
+                state['sum_grad_norm_square'] = EPSILON
 
     def step(self, closure=None):
         """Performs a single optimization step.
@@ -154,6 +155,7 @@ class FreeRexSphere(Optimizer):
 
                 grad_norm = grad.norm(2)
                 state['max_grad'] = max(state['max_grad'], grad_norm)
+                state['sum_grad_norm_square'] += grad_norm**2
 
                 # state['max_l2'] = max(state['max_l2'], grad.norm(2))
 
@@ -164,6 +166,9 @@ class FreeRexSphere(Optimizer):
                 grad_sum_norm = state['grad_sum'].norm(2)
 
                 state['one_over_eta_sq'] = max(state['one_over_eta_sq'] + 2*grad_norm**2, state['max_grad'] * grad_sum_norm)
+
+                if group['momentum']:
+                    state['center'] += (p.data - state['center'])* grad_norm**2/state['sum_grad_norm_square']
 
                 p.data = state['center']-state['grad_sum']/grad_sum_norm * (np.exp(state['grad_sum'].norm(2)*group['lr']/(np.sqrt(state['one_over_eta_sq']))) - 1.0)# * state['scaling']#/np.sqrt(state['max_l1'])
 

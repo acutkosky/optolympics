@@ -84,8 +84,12 @@ def get_optimizer(model, args):
                                 weight_decay=args.weight_decay)
 
     if args.optimizer == 'FreeRexSphere':
+        if args.momentum != 0:
+            momentum = True
+        else:
+            momentum = False
         optimizer = freerex.FreeRexSphere(model.parameters(), args.lr,
-                                weight_decay=args.weight_decay)
+                                weight_decay=args.weight_deca, momentum=momentum)
 
     if args.optimizer == 'FreeRex':
         optimizer = freerex.FreeRex(model.parameters(), args.lr,
