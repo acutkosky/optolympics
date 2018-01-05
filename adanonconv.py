@@ -69,8 +69,8 @@ class MetaLROptimizer(Optimizer):
                 state['step'] = 0
                 state['last_grad'] = p.data.new().resize_as_(p.data).zero_()
                 state['last_loss'] = 0
-                # state['eta_optimizer'] = oloalgs.parabolic_bounded_optimizer()
-                state['eta_optimizer'] = oloalgs.ONSCoinBetting1D(positive_only=True, domain = [0.000001, 10000])
+                state['eta_optimizer'] = oloalgs.parabolic_bounded_optimizer()
+                # state['eta_optimizer'] = oloalgs.ONSCoinBetting1D(positive_only=True, domain = [0.000001, 10000])
                 state['offset'] = EPSILON
                 state['eta_grad_lin_part'] = 0
                 state['do_update'] = True
@@ -114,9 +114,12 @@ class MetaLROptimizer(Optimizer):
                     # state['grad_squared_sum'] = max(1.0, state['last_grad'].norm(2)**2)
                     state['eta_grad_lin_part'] = -grad_product/np.sqrt(state['grad_squared_sum'])
                     eta_grad_quad_part_est = 0.5 * state['L'] * state['last_grad'].norm(2)**2/state['grad_squared_sum']
-                    eta_grad_est = state['eta_grad_lin_part'] + 2 * state['eta'] * eta_grad_quad_part_est
-                    state['eta_optimizer'].max_grad_hint(eta_grad_est)
-                    eta = state['eta_optimizer'].get_prediction()
+                    # eta_grad_est = state['eta_grad_lin_part'] + 2 * state['eta'] * eta_grad_quad_part_est
+                    eta_grad_est = np.array([state['eta_grad_lin_part'],eta_grad_quad_part_est])
+
+                    state['eta_optimizer'].hint(eta_grad_est)
+
+                    eta = state['eta_optimizer'].get_prediction()[0]
                     state['eta'] = eta
                     # eta = 0.5
                     print('using eta: ',eta)
@@ -155,8 +158,8 @@ class MetaLROptimizer(Optimizer):
                     print('last grad norm sq: ', state['last_grad'].norm(2)**2)
                     eta_grad_quad_part = 0.5 * Lt * state['last_grad'].norm(2)**2/state['grad_squared_sum']
 
-                    eta_grad = state['eta_grad_lin_part'] + 2 * eta *eta_grad_quad_part
-                    # eta_grad = np.array([state['eta_grad_lin_part'], eta_grad_quad_part])
+                    # eta_grad = state['eta_grad_lin_part'] + 2 * eta *eta_grad_quad_part
+                    eta_grad = np.array([state['eta_grad_lin_part'], eta_grad_quad_part])
                     print('eta grad lin part: ', state['eta_grad_lin_part'])
                     print('eta grad quad part: ', eta_grad_quad_part)
                     print('eta grad: ', eta_grad)

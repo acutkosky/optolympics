@@ -16,7 +16,7 @@ def loss_closure(w):
     s = 1.0
     # s = np.abs(np.random.normal(2,1))
     def closure():
-        return 0.5 * (w.dot(x)-y).pow(2) * s
+        return 0.5 * (w.dot(x)/100-y).abs() * s * 100
     return closure
 
 def batchLoss(w, N):
@@ -25,14 +25,14 @@ def batchLoss(w, N):
         accum += loss(w)
     return accum/N
 
-
-w = autograd.Variable(torch.FloatTensor([1,2,3,4,5]), requires_grad=True)
+# [1,2,3,4,5]
+w = autograd.Variable(torch.FloatTensor(np.zeros(5)), requires_grad=True)
 # w = autograd.Variable(torch.FloatTensor([10]), requires_grad=True)
 # opt = torch.optim.Adagrad([w], 1)
 # opt = AdaNonConvL([w], 0.00001, True)
 opt = MetaLROptimizer([w], unbiased = False)
-# opt = MyAdaGrad([w],20)
-for _ in range(1000):
+# opt = MyAdaGrad([w],1)
+for _ in range(100):
     closure = loss_closure(w)
     l = closure()
     print('loss: ',l)

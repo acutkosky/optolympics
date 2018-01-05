@@ -41,6 +41,10 @@ class OLOalgorithm:
             raise RunTimeError('Called update twice for the same prediction!')
         self.has_updated = True
 
+    def hint(self, hint):
+        return
+        # raise NotImplementedError
+
     def get_prediction(self):
         self.has_updated = False
         return self.prediction
@@ -72,7 +76,7 @@ class ONSCoinBetting1D(OLOalgorithm):
         if(positive_only):
             self.positive_only = 0.0
 
-    def max_grad_hint(self, hint):
+    def hint(self, hint):
         print('ONS1D grad hint: ', abs(hint))
         self.G = max(2*abs(hint), 0.9*self.G)
 
@@ -171,6 +175,10 @@ class NDreduction(OLOalgorithm):
         self.unbounded_olo = unbounded_olo
         self.origin = origin
 
+    def hint(self, hint):
+        self.unbounded_olo.hint(dot(hint, (self.bounded_olo.get_prediction() - self.origin)))
+        self.bounded_olo.hint(hint)
+
     def update(self, gradient):
         super(NDreduction, self).update(gradient)
         print('NDreduction grad: ', gradient)
@@ -220,7 +228,7 @@ def AdaGradONSBetting(G=1.0, epsilon=1.0, origin = 0, normfn = lpnorm, dualnormf
 
     return NDreduction(adagrad, onsbetting, origin)
 
-def AdaGradONSBettingLp(G=1, p=2):
+def AdaGradONSBettingLp(G=1.0, epsilon=1.0, p=2):
 
     q = dual_lp(p)
     normfn = lambda x:lpnorm(x, p)
@@ -228,7 +236,7 @@ def AdaGradONSBettingLp(G=1, p=2):
     dualnormfn = lambda x: lpnorm(x, q)
 
 
-    return AdaGradONSBetting(G, 0, normfn, dualnormfn)
+    return AdaGradONSBetting(G, epsilon, 0, normfn, dualnormfn)
 
 class BoundedOptimizer(OLOalgorithm):
     """
@@ -242,12 +250,18 @@ class BoundedOptimizer(OLOalgorithm):
         self.prediction, self.projection_gradient = self.projector(self.unbounded_olo.get_prediction())
         self.get_dual_norm = get_dual_norm
 
+    def hint(self, hint):
+        hint_norm = self.get_dual_norm(hint)
+        self.unbounded_olo.hint(hint + hint_norm*self.projection_gradient)
+
     def update(self, gradient):
         super(BoundedOptimizer, self).update(gradient)
         gradient_norm = self.get_dual_norm(gradient)
         gradient_correction = gradient + gradient_norm*self.projection_gradient
         self.unbounded_olo.update(gradient_correction)
         print('unbounded eta: ', self.unbounded_olo.get_prediction())
+        print('original gradient: ',gradient)
+        print('projection_gardeitn: ', self.projection_gradient)
         print('corrected gradient: ', gradient_correction)
         self.prediction, self.projection_gradient = self.projector(self.unbounded_olo.get_prediction())
 
@@ -260,6 +274,7 @@ def LpBoundedOptimizer(G=1.0, d=1.0, p=2):
     return BoundedOptimizer(unbounded_olo, projector, get_dual_norm)
 
 def parabolic_projector(x):
+    print('projecting: ', x)
     if np.linalg.norm(x)==0:
         x = np.array([0,0])
 
@@ -292,7 +307,7 @@ def parabolic_projector(x):
     # a = w - p/3w
 
     # The cubic becomes
-    # w^3 - p^3/27 * w^3 - q =0
+    # w^3 - p^3/(27 * w^3) - q =0
 
     # Multiply through by w^3 and this becomes a quadratic in w^3. Using quadratic formula:
 
@@ -300,26 +315,143 @@ def parabolic_projector(x):
 
     p = 0.5 - x[1]
     q = 0.5 * x[0]
+    print('q**2 + 4.0/27.0 * p**3: ',q**2 + 4.0/27.0 * p**3)
 
-    wcubed = 0.5 * (q + np.sqrt(q**2 + 4.0/27.0 * p**3))
-    w = np.power(wcubed, 1.0/3.0)
+    wcubed = 0.5 * (q + np.lib.scimath.sqrt(q**2 + 4.0/27.0 * p**3))
+    w = np.power(wcubed,1.0/3.0)
 
-    a = w - p/(3 * w)
+    a = np.real(w - p/(3 * w))
 
     projection = np.array([a, a**2])
 
     displacement = x - projection
 
     gradient = displacement/lpnorm(displacement)
+    print('projection: ', projection, gradient)
+    return projection, gradient
 
-    return projection, displacement
-
-def parabolic_bounded_optimizer(G=1.0, epsilon=1.0):
-    unbounded_olo = AdaGradONSBetting(G, epsilon)
-    projector = parabolic_projector
+def parabolic_bounded_optimizer(G=1.0, epsilon=1.0, p=2):
+    unbounded_olo = AdaGradONSBettingLp(G, epsilon, p)
+    if(p==2):
+        projector = parabolic_projector
+    elif(p==1):
+        projector = parabolic_projector_l1
+    elif(p==float('inf')):
+        projector = parabolic_projector_linf
+    else:
+        raise SyntaxError('Incorrect p!')
     return BoundedOptimizer(unbounded_olo, projector)
 
 
 
+def parabolic_projector_l1(x):
+    if np.linalg.norm(x)==0:
+        x = np.array([0,0])
+
+    if(x[1]>x[0]**2):
+        return x, np.zeros(shape=x.shape)
+
+    if(x[0]<0):
+        projection = np.array([0, max(x[1], 0)])
+        displacement = x - projection
+        gradient = np.zeros(2)
+        maxcoord = np.argmax(displacement)
+        gradient[maxcoord] = np.sign(displacement[maxcoord])
+        gradient = np.sign(displacement)#displacement/(0.0000001+ lpnorm(displacement, p=1))
+
+        return projection, gradient
 
 
+
+    # minimize
+    # |a-x[0]| + |a^2-x[1]|
+
+    # differentiate and simplify:
+    # sign(a-x[0]) + 2 a sign(a^2 - x[1]) = 0
+
+    # case 1: x[0] < 0.5
+    # set a = x[0]. Since x[1] < x[0]^2, sign(a^2- x[1]) = 1
+    # sign(a-x[0]) + 2 x[0] = 0
+    
+    # Case 2: x[0] > 0.5, x[1] > 0.25
+    # set a = sqrt(x[1]). Since sqrt(x[1]) < x[0], sign(a - x[0]) = -1
+    # also, 2 sqrt(x[1]) >= 1
+    # sign(a- x[0]) + 2 sqrt(x[1]) sign(a^2 - x[1])
+
+    # case 3: x[0] > 0.5, x[1] < 0.25
+    # set a = 0.5
+    # sign(a- x[0]) + 2a sign(a^2 - x[1]) = -1 + 1 = 0
+
+
+# def closest(a,b):
+#     current = trials[0]
+#     best = np.abs(a-current) + np.abs(b - current**2)
+#     for t in trials:
+#         test = np.abs(a-t) + np.abs(b - t**2)
+#         if test<best:
+#             best = test
+#             current = t
+#     return current, best
+
+
+
+    if(x[0] < 0.5):
+        projection = np.array([x[0], x[0]**2])
+    elif(x[1]> 0.25):
+        projection = np.array([np.sqrt(x[1]), x[1]])
+    else:
+        projection = np.array([0.5, 0.25])
+
+
+    displacement = x - projection
+    gradient = np.zeros(2)
+    maxcoord = np.argmax(displacement)
+    gradient[maxcoord] = np.sign(displacement[maxcoord])
+    gradient = np.sign(displacement)#displacement/(0.000001+ lpnorm(displacement, p=1))
+
+
+    return projection, gradient
+
+def parabolic_projector_linf(x):
+    if np.linalg.norm(x)==0:
+        x = np.array([0,0])
+
+    if(x[1]>x[0]**2):
+        return x, np.zeros(shape=x.shape)
+
+    if(x[0]<0):
+        projection = np.array([0, max(x[1], 0)])
+        displacement = x - projection
+        gradient = np.zeros(2)
+        maxcoord = np.argmax(displacement)
+        gradient[maxcoord] = np.sign(displacement[maxcoord])
+
+        return projection, gradient
+
+
+
+    # minimize
+    # max(|a-x[0]| + |a^2-x[1]|)
+
+    d = 0.5 * (1 + 2 * x[0] - np.sqrt(1 + 4*x[0] + 4*x[1]))
+    a = x[0] - d
+
+    projection = np.array([a, a**2])
+
+    displacement = x - projection
+    gradient = np.zeros(2)
+    maxcoord = np.argmax(displacement)
+    gradient[maxcoord] = np.sign(displacement[maxcoord])
+
+
+    return projection, gradient
+
+def closest(a,b):
+    current = 0
+    best = max(np.abs(a), np.abs(b))
+    for trial in triess:
+         r = max(np.abs(a-trial), np.abs(b - trial**2))
+         if r < best:
+                 best = r
+                 current = trial
+    return current, best
