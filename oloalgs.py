@@ -49,6 +49,38 @@ class OLOalgorithm:
         self.has_updated = False
         return self.prediction
 
+class SOLO(OLOalgorithm):
+    def __init__(self, origin=0, G=EPSILON):
+        super(SOLO, self).__init__(origin)
+        self.origin = origin
+        self.G = G
+        self.sum_grad_squares = 0
+        self.sum_gradients = 0
+
+    def update(self, gradient):
+        super(SOLO, self).update(gradient)
+        self.sum_grad_squares += gradient**2
+        self.sum_gradients += gradient
+        self.prediction = -self.sum_gradients/np.sqrt(self.G + self.sum_grad_squares)
+
+class FreeRex(OLOalgorithm):
+    def __init__(self, origin=0, lr=1.0):
+        super(FreeRex, self).__init__(origin)
+        self.one_over_eta_sq = 0
+        self.grad_sum = 0
+        self.max_grad = 0
+        self.lr = lr
+
+    def update(self, gradient):
+        super(FreeRex, self).update(gradient)
+        print('freerex gradient: ', gradient)
+        print('freerex prediction: ',self.prediction)
+        print('freerex maxgrad: ', self.max_grad)
+        if(gradient != 0):
+            self.max_grad = max(self.max_grad, np.abs(gradient))
+            self.grad_sum += gradient
+            self.one_over_eta_sq = max(self.one_over_eta_sq + 2*gradient**2, self.max_grad*np.abs(self.grad_sum))
+            self.prediction = self.origin - np.sign(self.grad_sum) * (np.exp(np.abs(self.grad_sum)*self.lr/np.sqrt(self.one_over_eta_sq))-1.0)
 
 class ONSCoinBetting1D(OLOalgorithm):
     """Uses ONS to adapt a betting fraction for 1-dimensional OLO"""
@@ -78,7 +110,7 @@ class ONSCoinBetting1D(OLOalgorithm):
 
     def hint(self, hint):
         print('ONS1D grad hint: ', abs(hint))
-        self.G = max(2*abs(hint), 0.9*self.G)
+        self.G = max(abs(hint), EPSILON)
 
 
 
@@ -119,7 +151,7 @@ class ONSCoinBetting1D(OLOalgorithm):
         print('ONS1D wealth: ', self.reward + self.initial_wealth)
         print('ONS1D G: ', self.G)
         print('ONS1D beta: ', self.beta)
-        print('ONS1D betamax: ', 0.5/self.G)
+        print('ONS1D betamax: ', np.sqrt(self.steps)/(np.sqrt(self.steps)+1))
         print('ONS1D resets: ', self.resets)
         print('ONS1D since_last_reset: ',self.since_last_reset)
         print('ONS1D num pos: ', self.numpos)
@@ -161,7 +193,7 @@ class ONSCoinBetting1D(OLOalgorithm):
 
         self.beta = -(self.sum_beta_gradients)/(self.sum_beta_strong_convex_params + self.initial_beta_regularizer)
         # self.beta = np.clip(self.beta, -0.5/self.G * self.positive_only, 0.5/self.G)
-        self.beta = np.clip(self.beta, -0.5 * self.positive_only, 0.5)
+        self.beta = np.clip(self.beta, -np.sqrt(self.steps)/(np.sqrt(self.steps)+1) * self.positive_only, np.sqrt(self.steps)/(np.sqrt(self.steps)+1))
 
         self.prediction = (self.reward + self.initial_wealth) * self.beta
         if self.domain != None:
@@ -229,6 +261,13 @@ def AdaGradONSBetting(G=1.0, epsilon=1.0, origin = 0, normfn = lpnorm, dualnormf
 
     return NDreduction(adagrad, onsbetting, origin)
 
+def AdaGradFreeRex(origin=0):
+    adagrad = AdaGradFTRL(1, origin*0, lpnorm, lpnorm)
+    freerex = FreeRex(0,1)
+    ons_betting = ONSCoinBetting1D()
+    return NDreduction(adagrad, ons_betting, origin)
+
+
 def AdaGradONSBettingLp(G=1.0, epsilon=1.0, p=2):
 
     q = dual_lp(p)
@@ -285,6 +324,12 @@ def parabolic_projector(x):
         gradient = displacement/lpnorm(displacement)
         print('projection: ', projection, gradient)
         return projection, displacement
+    # if(x[0]>100):
+    #     projection = np.array([1, max(x[1], 1)])
+    #     displacement = x - projection
+    #     gradient = displacement/lpnorm(displacement)
+    #     print('projection: ', projection, gradient)
+    #     return projection, displacement        
 
     if(x[1]>x[0]**2):
         print('projection: ', x, np.zeros(shape=x.shape))
@@ -333,7 +378,8 @@ def parabolic_projector(x):
     return projection, gradient
 
 def parabolic_bounded_optimizer(G=1.0, epsilon=1.0, p=2):
-    unbounded_olo = AdaGradONSBettingLp(G, epsilon, p)
+    # unbounded_olo = AdaGradONSBettingLp(G, epsilon, p)
+    unbounded_olo = AdaGradFreeRex()
     if(p==2):
         projector = parabolic_projector
     elif(p==1):

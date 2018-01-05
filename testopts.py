@@ -2,6 +2,7 @@ import torch
 from torch import autograd
 import numpy as np
 from adanonconv import *
+from freerex import *
 
 
 def loss(w):
@@ -16,7 +17,7 @@ def loss_closure(w):
     s = 1.0
     # s = np.abs(np.random.normal(2,1))
     def closure():
-        return 0.5 * (w.dot(x)-y).abs() * s
+        return 0.5 * (w.dot(x)/10000-y).abs() * s
     return closure
 
 def batchLoss(w, N):
@@ -25,13 +26,14 @@ def batchLoss(w, N):
         accum += loss(w)
     return accum/N
 
-# [1,2,3,4,5]
+# 
 w = autograd.Variable(torch.FloatTensor(np.zeros(5)), requires_grad=True)
 # w = autograd.Variable(torch.FloatTensor([10]), requires_grad=True)
 # opt = torch.optim.Adagrad([w], 1)
 # opt = AdaNonConvL([w], 0.00001, True)
 opt = MetaLROptimizer([w], unbiased = False)
-# opt = MyAdaGrad([w],50)
+# opt = MyAdaGrad([w],1)
+# opt = FreeRex([w])
 for _ in range(100):
     closure = loss_closure(w)
     l = closure()
@@ -42,3 +44,4 @@ for _ in range(100):
 
 print('loss: ',batchLoss(w, 10000))
 print('norm: ',(w.data- torch.FloatTensor([1,2,3,4,5])).norm(2))
+print(w)
