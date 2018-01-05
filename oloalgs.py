@@ -184,6 +184,7 @@ class NDreduction(OLOalgorithm):
         print('NDreduction grad: ', gradient)
         print('Bounded prediction: ', self.bounded_olo.get_prediction())
         print('Unbounded prediction: ', self.unbounded_olo.get_prediction())
+        print('Combo prediction: ',self.prediction)
 
         s = dot(gradient, (self.bounded_olo.get_prediction() - self.origin))
         self.unbounded_olo.update(s)
@@ -278,15 +279,16 @@ def parabolic_projector(x):
     if np.linalg.norm(x)==0:
         x = np.array([0,0])
 
-    if(x[1]>x[0]**2):
-        return x, np.zeros(shape=x.shape)
-
     if(x[0]<0):
         projection = np.array([0, max(x[1], 0)])
         displacement = x - projection
         gradient = displacement/lpnorm(displacement)
-
+        print('projection: ', projection, gradient)
         return projection, displacement
+
+    if(x[1]>x[0]**2):
+        print('projection: ', x, np.zeros(shape=x.shape))
+        return x, np.zeros(shape=x.shape)
 
 
     # minimize
