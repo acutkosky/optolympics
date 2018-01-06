@@ -106,7 +106,6 @@ class MetaLROptimizer(Optimizer):
                 state['step'] += 1
                 state['current_grad'] = grad
 
-                # state['grad_squared_sum'] = state['grad_squared_sum'] + grad.norm(2)**2
 
                 if(self.do_update):
                     state['update_count'] = 1.0*state['update_count'] + 1
@@ -115,32 +114,35 @@ class MetaLROptimizer(Optimizer):
 
                     state['grad_squared_sum'] = 1.0*(state['grad_squared_sum']) + state['last_grad'].norm(2)**2
                     state['max_grad'] = max(state['max_grad'], state['last_grad'].norm(2))
+
                     state['lr_scaling'] = np.sqrt(state['grad_squared_sum'])
                     # state['lr_scaling'] = state['max_grad']
                     # state['lr_scaling'] = np.sqrt(state['grad_squared_sum']/state['update_count'])
                     # state['lr_scaling'] = state['last_grad'].norm(2)
+
                     if(state['lr_scaling'] == 0):
                         state['lr_scaling'] = 1
-                    # state['grad_squared_sum'] = max(1.0, state['last_grad'].norm(2)**2)
+
                     state['eta_grad_lin_part'] = -grad_product/state['lr_scaling']#np.sqrt(state['grad_squared_sum'])
                     eta_grad_quad_part_est = 0.5 * state['L'] * state['last_grad'].norm(2)**2/state['lr_scaling']**2
-                    #state['grad_squared_sum']
-                    # eta_grad_est = state['eta_grad_lin_part'] + 2 * state['eta'] * eta_grad_quad_part_est
+
                     eta_grad_est = np.array([state['eta_grad_lin_part'],eta_grad_quad_part_est])
 
                     state['eta_optimizer'].hint(eta_grad_est)
 
                     eta = state['eta_optimizer'].get_prediction()[0]
                     state['eta'] = eta
-                    # eta = 0.5
-                    print('using eta: ',eta)
-                    state['offset'] = -eta * state['last_grad']/state['lr_scaling']#np.sqrt(state['grad_squared_sum'])
+
+                    # print('using eta: ',eta)
+
+                    state['offset'] = -eta * state['last_grad']/state['lr_scaling']
                     p.data += state['offset']
-                    print('grad: ',state['last_grad'])
-                    print('grad_squared_sum: ',state['grad_squared_sum'])
-                    print('lr scaling: ',state['lr_scaling'])
-                    print('max grad: ', state['max_grad'])
-                    print('count: ',state['update_count'])
+
+                    # print('grad: ',state['last_grad'])
+                    # print('grad_squared_sum: ',state['grad_squared_sum'])
+                    # print('lr scaling: ',state['lr_scaling'])
+                    # print('max grad: ', state['max_grad'])
+                    # print('count: ',state['update_count'])
                 else:
                     state['last_grad'] = grad
 
@@ -159,30 +161,30 @@ class MetaLROptimizer(Optimizer):
 
                     Lt = 2 * ( loss.data[0] - state['last_loss'].data[0] - (state['offset']*(state['current_grad'])).sum() )/(0.000001+state['offset'].norm(2)**2)
                     Lt= max(Lt, 0)
-                    print('loss difference: ', loss.data[0] - state['last_loss'].data[0])
+
+                    # print('loss difference: ', loss.data[0] - state['last_loss'].data[0])
+                    
                     state['L'] = max(Lt,state['L'])
-                    # print('loss: ', loss.data[0])
-                    # print('last loss: ', state['last_loss'].data[0])
-                    # print('offset: ', state['offset'])
-                    # print('grad: ', state['current_grad'])
-                    # print('param: ',p.data)
+
+
                     eta = state['eta']
-                    print('Lt: ', Lt)
-                    print('offset norm sq: ',state['offset'].norm(2)**2)
-                    print('last grad norm sq: ', state['last_grad'].norm(2)**2)
+
+                    # print('Lt: ', Lt)
+                    # print('offset norm sq: ',state['offset'].norm(2)**2)
+                    # print('last grad norm sq: ', state['last_grad'].norm(2)**2)
+
                     eta_grad_quad_part = 0.5 * Lt * state['last_grad'].norm(2)**2/state['lr_scaling']**2
-                    #state['grad_squared_sum']
 
                     # eta_grad = state['eta_grad_lin_part'] + 2 * eta *eta_grad_quad_part
                     eta_grad = np.array([state['eta_grad_lin_part'], eta_grad_quad_part])
-                    print('eta grad lin part: ', state['eta_grad_lin_part'])
-                    print('eta grad quad part: ', eta_grad_quad_part)
-                    print('eta grad: ', eta_grad)
+
+                    # print('eta grad lin part: ', state['eta_grad_lin_part'])
+                    # print('eta grad quad part: ', eta_grad_quad_part)
+                    # print('eta grad: ', eta_grad)
 
                     state['eta_optimizer'].update(eta_grad)
 
                     eta = state['eta_optimizer'].get_prediction()
-                    print('eta',eta)
                     state['last_grad'] = state['current_grad']
 
 

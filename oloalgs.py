@@ -31,10 +31,11 @@ def dual_lp(p):
 class OLOalgorithm:
     """base class for deriving online linear optimization algorithms."""
 
-    def __init__(self, origin):
+    def __init__(self, origin, verbose=False):
         self.origin = origin
         self.prediction = origin
         self.has_updated = False
+        self.verbose = verbose
 
     def update(self, gradient):
         if(self.has_updated):
@@ -50,8 +51,8 @@ class OLOalgorithm:
         return self.prediction
 
 class SOLO(OLOalgorithm):
-    def __init__(self, origin=0, G=EPSILON):
-        super(SOLO, self).__init__(origin)
+    def __init__(self, origin=0, G=EPSILON,verbose=False):
+        super(SOLO, self).__init__(origin,verbose)
         self.origin = origin
         self.G = G
         self.sum_grad_squares = 0
@@ -64,8 +65,8 @@ class SOLO(OLOalgorithm):
         self.prediction = -self.sum_gradients/np.sqrt(self.G + self.sum_grad_squares)
 
 class FreeRex(OLOalgorithm):
-    def __init__(self, origin=0, lr=1.0):
-        super(FreeRex, self).__init__(origin)
+    def __init__(self, origin=0, lr=1.0,verbose=False):
+        super(FreeRex, self).__init__(origin,verbose)
         self.one_over_eta_sq = 0
         self.grad_sum = 0
         self.max_grad = 0
@@ -73,9 +74,10 @@ class FreeRex(OLOalgorithm):
 
     def update(self, gradient):
         super(FreeRex, self).update(gradient)
-        print('freerex gradient: ', gradient)
-        print('freerex prediction: ',self.prediction)
-        print('freerex maxgrad: ', self.max_grad)
+        if(self.verbose):
+            print('freerex gradient: ', gradient)
+            print('freerex prediction: ',self.prediction)
+            print('freerex maxgrad: ', self.max_grad)
         if(gradient != 0):
             self.max_grad = max(self.max_grad, np.abs(gradient))
             self.grad_sum += gradient
@@ -85,8 +87,8 @@ class FreeRex(OLOalgorithm):
 class ONSCoinBetting1D(OLOalgorithm):
     """Uses ONS to adapt a betting fraction for 1-dimensional OLO"""
 
-    def __init__(self, origin=0, G=1, epsilon=1, positive_only = False, domain=None):
-        super(ONSCoinBetting1D, self).__init__(origin)
+    def __init__(self, origin=0, G=1, epsilon=1, positive_only = False, domain=None, verbose=False):
+        super(ONSCoinBetting1D, self).__init__(origin,verbose)
 
         self.beta = 0
         self.initial_beta_regularizer = G*0.25
@@ -109,7 +111,6 @@ class ONSCoinBetting1D(OLOalgorithm):
             self.positive_only = 0.0
 
     def hint(self, hint):
-        print('ONS1D grad hint: ', abs(hint))
         self.G = max(abs(hint), EPSILON)
 
 
@@ -131,11 +132,6 @@ class ONSCoinBetting1D(OLOalgorithm):
         self.last_gradient = None
 
 
-        print('ONS1D grad: ', gradient)
-
-        # self.G = max(abs(gradient), self.G)
-        # clipped_gradient = gradient/self.G
-
         clipped_gradient = np.clip(gradient,-self.G, self.G)
         if(self.domain != None):
             if self.prediction == self.domain[0] and clipped_gradient > 0:
@@ -144,17 +140,18 @@ class ONSCoinBetting1D(OLOalgorithm):
                 clipped_gradient = 0
         clipped_gradient = clipped_gradient/self.G
 
-        print('ONS1D clipped grad: ', clipped_gradient)
-        print('ONS1D prediction: ', self.prediction)
         self.reward += -clipped_gradient*self.prediction
-        print('ONS1D reward: ', self.reward)
-        print('ONS1D wealth: ', self.reward + self.initial_wealth)
-        print('ONS1D G: ', self.G)
-        print('ONS1D beta: ', self.beta)
-        print('ONS1D betamax: ', np.sqrt(self.steps)/(np.sqrt(self.steps)+1))
-        print('ONS1D resets: ', self.resets)
-        print('ONS1D since_last_reset: ',self.since_last_reset)
-        print('ONS1D num pos: ', self.numpos)
+        if(self.verbose):
+            print('ONS1D clipped grad: ', clipped_gradient)
+            print('ONS1D prediction: ', self.prediction)       
+            print('ONS1D reward: ', self.reward)
+            print('ONS1D wealth: ', self.reward + self.initial_wealth)
+            print('ONS1D G: ', self.G)
+            print('ONS1D beta: ', self.beta)
+            print('ONS1D betamax: ', np.sqrt(self.steps)/(np.sqrt(self.steps)+1))
+            print('ONS1D resets: ', self.resets)
+            print('ONS1D since_last_reset: ',self.since_last_reset)
+            print('ONS1D num pos: ', self.numpos)
         self.since_last_reset+=1
         self.steps += 1
 
@@ -165,8 +162,6 @@ class ONSCoinBetting1D(OLOalgorithm):
             self.resets += 1
             self.since_last_reset = 0
             ratio = self.G/abs(gradient)
-            # ratio = 0
-            # self.reward *= ratio
             self.sum_beta_gradients *= ratio
             self.sum_beta_strong_convex_params *= ratio**2
         self.G = max(abs(gradient), self.G)
@@ -179,20 +174,13 @@ class ONSCoinBetting1D(OLOalgorithm):
         self.sum_beta_strong_convex_params = beta_strong_convex_param
 
 
-        # self.G = max(max(abs(gradient), 0.9*self.G), 1.0)
-        # self.G = max(abs(gradient), self.G)
-
-        # self.initial_beta_regularizer = self.G*0.25
-        # self.initial_wealth = self.G * self.epsilon
-
         self.initial_beta_regularizer = 0.25
         self.initial_wealth = self.epsilon
 
         self.sumgradsquares += clipped_gradient*clipped_gradient
-        # self.initial_wealth = self.epsilon*np.sqrt(1 + self.sumgradsquares)
 
         self.beta = -(self.sum_beta_gradients)/(self.sum_beta_strong_convex_params + self.initial_beta_regularizer)
-        # self.beta = np.clip(self.beta, -0.5/self.G * self.positive_only, 0.5/self.G)
+
         self.beta = np.clip(self.beta, -np.sqrt(self.steps)/(np.sqrt(self.steps)+1) * self.positive_only, np.sqrt(self.steps)/(np.sqrt(self.steps)+1))
 
         self.prediction = (self.reward + self.initial_wealth) * self.beta
@@ -201,8 +189,8 @@ class ONSCoinBetting1D(OLOalgorithm):
 
 
 class NDreduction(OLOalgorithm):
-    def __init__(self, bounded_olo, unbounded_olo, origin=0):
-        super(NDreduction, self).__init__(origin)
+    def __init__(self, bounded_olo, unbounded_olo, origin=0, verbose=False):
+        super(NDreduction, self).__init__(origin, verbose)
         self.bounded_olo = bounded_olo
         self.unbounded_olo = unbounded_olo
         self.origin = origin
@@ -213,10 +201,11 @@ class NDreduction(OLOalgorithm):
 
     def update(self, gradient):
         super(NDreduction, self).update(gradient)
-        print('NDreduction grad: ', gradient)
-        print('Bounded prediction: ', self.bounded_olo.get_prediction())
-        print('Unbounded prediction: ', self.unbounded_olo.get_prediction())
-        print('Combo prediction: ',self.prediction)
+        if(self.verbose):
+            print('NDreduction grad: ', gradient)
+            print('Bounded prediction: ', self.bounded_olo.get_prediction())
+            print('Unbounded prediction: ', self.unbounded_olo.get_prediction())
+            print('Combo prediction: ',self.prediction)
 
         s = dot(gradient, (self.bounded_olo.get_prediction() - self.origin))
         self.unbounded_olo.update(s)
@@ -238,7 +227,6 @@ class AdaGradFTRL(OLOalgorithm):
 
     def update(self, gradient):
         super(AdaGradFTRL, self).update(gradient)
-        print('adagradFTRL grad: ', gradient)
 
         gradient_norm_square = self.dualnormfn(gradient)**2
 
@@ -283,8 +271,8 @@ class BoundedOptimizer(OLOalgorithm):
     projector(x) = Pi_K(x), \nabla S_K(x)
     """
     def __init__(self, unbounded_olo, projector=lp_projector, \
-        get_dual_norm = lpnorm):
-        super(BoundedOptimizer, self).__init__(self)
+        get_dual_norm=lpnorm, verbose=False):
+        super(BoundedOptimizer, self).__init__(0, verbose)
         self.projector = projector
         self.unbounded_olo = unbounded_olo
         self.prediction, self.projection_gradient = self.projector(self.unbounded_olo.get_prediction())
@@ -299,10 +287,11 @@ class BoundedOptimizer(OLOalgorithm):
         gradient_norm = self.get_dual_norm(gradient)
         gradient_correction = gradient + gradient_norm*self.projection_gradient
         self.unbounded_olo.update(gradient_correction)
-        print('unbounded eta: ', self.unbounded_olo.get_prediction())
-        print('original gradient: ',gradient)
-        print('projection_gardeitn: ', self.projection_gradient)
-        print('corrected gradient: ', gradient_correction)
+        if(self.verbose):
+            print('unbounded eta: ', self.unbounded_olo.get_prediction())
+            print('original gradient: ',gradient)
+            print('projection_gardeitn: ', self.projection_gradient)
+            print('corrected gradient: ', gradient_correction)
         self.prediction, self.projection_gradient = self.projector(self.unbounded_olo.get_prediction())
 
 
@@ -314,7 +303,6 @@ def LpBoundedOptimizer(G=1.0, d=1.0, p=2):
     return BoundedOptimizer(unbounded_olo, projector, get_dual_norm)
 
 def parabolic_projector(x):
-    print('projecting: ', x)
     if np.linalg.norm(x)==0:
         x = np.array([0,0])
 
@@ -322,7 +310,6 @@ def parabolic_projector(x):
         projection = np.array([0, max(x[1], 0)])
         displacement = x - projection
         gradient = displacement/lpnorm(displacement)
-        print('projection: ', projection, gradient)
         return projection, displacement
     # if(x[0]>100):
     #     projection = np.array([1, max(x[1], 1)])
@@ -332,7 +319,6 @@ def parabolic_projector(x):
     #     return projection, displacement        
 
     if(x[1]>x[0]**2):
-        print('projection: ', x, np.zeros(shape=x.shape))
         return x, np.zeros(shape=x.shape)
 
 
@@ -362,7 +348,6 @@ def parabolic_projector(x):
 
     p = 0.5 - x[1]
     q = 0.5 * x[0]
-    print('q**2 + 4.0/27.0 * p**3: ',q**2 + 4.0/27.0 * p**3)
 
     wcubed = 0.5 * (q + np.lib.scimath.sqrt(q**2 + 4.0/27.0 * p**3))
     w = np.power(wcubed,1.0/3.0)
@@ -374,7 +359,6 @@ def parabolic_projector(x):
     displacement = x - projection
 
     gradient = displacement/lpnorm(displacement)
-    print('projection: ', projection, gradient)
     return projection, gradient
 
 def parabolic_bounded_optimizer(G=1.0, epsilon=1.0, p=2):
@@ -393,6 +377,7 @@ def parabolic_bounded_optimizer(G=1.0, epsilon=1.0, p=2):
 
 
 def parabolic_projector_l1(x):
+    '''THE GRADIENT COMPUTATION IS BROKEN HERE'''
     if np.linalg.norm(x)==0:
         x = np.array([0,0])
 
@@ -431,17 +416,6 @@ def parabolic_projector_l1(x):
     # sign(a- x[0]) + 2a sign(a^2 - x[1]) = -1 + 1 = 0
 
 
-# def closest(a,b):
-#     current = trials[0]
-#     best = np.abs(a-current) + np.abs(b - current**2)
-#     for t in trials:
-#         test = np.abs(a-t) + np.abs(b - t**2)
-#         if test<best:
-#             best = test
-#             current = t
-#     return current, best
-
-
 
     if(x[0] < 0.5):
         projection = np.array([x[0], x[0]**2])
@@ -455,12 +429,13 @@ def parabolic_projector_l1(x):
     gradient = np.zeros(2)
     maxcoord = np.argmax(displacement)
     gradient[maxcoord] = np.sign(displacement[maxcoord])
-    gradient = np.sign(displacement)#displacement/(0.000001+ lpnorm(displacement, p=1))
+    gradient = np.sign(displacement)
 
 
     return projection, gradient
 
 def parabolic_projector_linf(x):
+    '''THE GRADIENT COMPUTATION IS BROKEN HERE'''
     if np.linalg.norm(x)==0:
         x = np.array([0,0])
 
@@ -493,13 +468,3 @@ def parabolic_projector_linf(x):
 
 
     return projection, gradient
-
-def closest(a,b):
-    current = 0
-    best = max(np.abs(a), np.abs(b))
-    for trial in triess:
-         r = max(np.abs(a-trial), np.abs(b - trial**2))
-         if r < best:
-                 best = r
-                 current = trial
-    return current, best
