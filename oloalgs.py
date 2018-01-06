@@ -171,7 +171,7 @@ class ONSCoinBetting1D(OLOalgorithm):
                         - self.beta*beta_strong_convex_param
 
         self.sum_beta_gradients += beta_gradient
-        self.sum_beta_strong_convex_params = beta_strong_convex_param
+        self.sum_beta_strong_convex_params += beta_strong_convex_param
 
 
         self.initial_beta_regularizer = 0.25
@@ -307,7 +307,7 @@ def parabolic_projector(x):
         x = np.array([0,0])
 
     if(x[0]<0):
-        projection = np.array([0, max(x[1], 0)])
+        projection = np.array([0.0, max(x[1], 0.0)])
         displacement = x - projection
         gradient = displacement/lpnorm(displacement)
         return projection, displacement

@@ -115,9 +115,9 @@ class MetaLROptimizer(Optimizer):
                     state['grad_squared_sum'] = 1.0*(state['grad_squared_sum']) + state['last_grad'].norm(2)**2
                     state['max_grad'] = max(state['max_grad'], state['last_grad'].norm(2))
 
-                    state['lr_scaling'] = np.sqrt(state['grad_squared_sum'])
+                    # state['lr_scaling'] = np.sqrt(state['grad_squared_sum'])
                     # state['lr_scaling'] = state['max_grad']
-                    # state['lr_scaling'] = np.sqrt(state['grad_squared_sum']/state['update_count'])
+                    state['lr_scaling'] = np.sqrt(state['grad_squared_sum']/state['update_count'])
                     # state['lr_scaling'] = state['last_grad'].norm(2)
 
                     if(state['lr_scaling'] == 0):
