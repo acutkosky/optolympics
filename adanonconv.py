@@ -135,7 +135,7 @@ class MetaLROptimizer(Optimizer):
 
                     # print('using eta: ',eta)
 
-                    state['offset'] = -eta * state['last_grad']/state['lr_scaling']
+                    state['offset'] = -state['last_grad']/state['lr_scaling'] *eta
                     p.data += state['offset']
 
                     # print('grad: ',state['last_grad'])
