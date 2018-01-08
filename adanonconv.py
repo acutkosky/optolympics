@@ -71,6 +71,7 @@ class MetaLROptimizer(Optimizer):
                 state['last_loss'] = 0
                 # state['eta_optimizer'] = oloalgs.parabolic_bounded_optimizer()
                 state['eta_optimizer'] = oloalgs.ONSCoinBetting1D(positive_only=True, domain = [0.000001, 10000])
+                state['momentum_optimizer'] = oloalgs.ONSCoinBetting1D(positive_only=True, domain = [0.000001, 1])
                 state['offset'] = EPSILON
                 state['eta_grad_lin_part'] = 0
                 state['do_update'] = True
@@ -79,6 +80,9 @@ class MetaLROptimizer(Optimizer):
                 state['eta'] = 0
                 state['max_grad'] = 0
                 state['update_count'] = 0
+                state['momentum'] = 0
+                state['d_offset_d_eta'] = 0
+                state['d_offset_d_momentum'] = 0
 
 
     def step(self, closure=None):
@@ -127,18 +131,36 @@ class MetaLROptimizer(Optimizer):
                     state['eta_grad_lin_part'] = -grad_product/state['lr_scaling']#np.sqrt(state['grad_squared_sum'])
                     eta_grad_quad_part_est = 0.5 * state['L'] * state['last_grad'].norm(2)**2/state['lr_scaling']**2
 
-                    # eta_grad_est = np.array([state['eta_grad_lin_part'],eta_grad_quad_part_est])
-                    eta_grad_est = state['eta_grad_lin_part'] + 2 * state['eta'] * eta_grad_quad_part_est
+                    state['offset_grad_lin_part'] = p.grad.data
+                    offset_grad_quad_part_est = state['L'] * state['offset']
 
-                    # state['eta_optimizer'].hint(eta_grad_est)
+                    # eta_grad_est = np.array([state['eta_grad_lin_part'],eta_grad_quad_part_est])
+                    # eta_grad_est = state['eta_grad_lin_part'] + 2 * state['eta'] * eta_grad_quad_part_est
+
+                    offset_grad_est = state['offset_grad_lin_part'] + offset_grad_quad_part_est
+
+
+                    state['d_offset_d_eta'] = -state['last_grad']/state['lr_scaling']
+
+                    state['d_offset_d_momentum'] = state['offset']
+
+                    eta_grad_est = torch.sum(state['d_offset_d_eta'] * offset_grad_est)
+                    momentum_grad_est = torch.sum(state['d_offset_d_momentum']* offset_grad_est)
+
+                    total_grad_est = np.array([eta_grad_est, momentum_grad_est])
+
+                    # state['eta_optimizer'].hint(total_grad_est)
 
                     eta = state['eta_optimizer'].get_prediction()
+                    momentum = state['momentum_optimizer'].get_prediction()
                     state['eta'] = eta
+                    state['momentum'] = momentum
 
                     # print('using eta: ',eta)
 
-                    state['offset'] = -state['last_grad']/state['lr_scaling'] *eta
-                     # + state['last_offset'] * momentum
+                    state['offset'] = -state['last_grad']/state['lr_scaling'] *eta + state['last_offset'] * momentum
+
+
                     p.data += state['offset']
 
                     # print('grad: ',state['last_grad'])
@@ -177,15 +199,25 @@ class MetaLROptimizer(Optimizer):
                     # print('last grad norm sq: ', state['last_grad'].norm(2)**2)
 
                     eta_grad_quad_part = 0.5 * Lt * state['last_grad'].norm(2)**2/state['lr_scaling']**2
+                    offset_grad_quad_part = Lt * state['offset']
 
-                    eta_grad = state['eta_grad_lin_part'] + 2 * eta *eta_grad_quad_part
+                    # eta_grad = state['eta_grad_lin_part'] + 2 * eta *eta_grad_quad_part
                     # eta_grad = np.array([state['eta_grad_lin_part'], eta_grad_quad_part])
+
+                    offset_grad = state['offset_grad_lin_part'] + offset_grad_quad_part
+
+                    eta_grad = torch.sum(state['d_offset_d_eta'] * offset_grad)
+                    momentum_grad = torch.sum(state['d_offset_d_momentum']* offset_grad)
+
+                    total_grad_est = np.array([eta_grad, momentum_grad])
+
 
                     # print('eta grad lin part: ', state['eta_grad_lin_part'])
                     # print('eta grad quad part: ', eta_grad_quad_part)
                     # print('eta grad: ', eta_grad)
 
                     state['eta_optimizer'].update(eta_grad)
+                    state['momentum_optimizer'].update(momentum_grad)
 
                     eta = state['eta_optimizer'].get_prediction()
                     state['last_grad'] = state['current_grad']
