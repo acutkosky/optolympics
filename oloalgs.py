@@ -111,7 +111,7 @@ class ONSCoinBetting1D(OLOalgorithm):
             self.positive_only = 0.0
 
     def hint(self, hint):
-        self.G = max(abs(hint), EPSILON)
+        self.G = max(2*abs(hint), EPSILON)
 
 
 

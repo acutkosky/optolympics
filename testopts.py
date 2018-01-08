@@ -17,7 +17,7 @@ def loss_closure(w):
     s = 1.0
     # s = np.abs(np.random.normal(2,1))
     def closure():
-        return 0.5 * (w.dot(x)/10000-y).abs() * s
+        return 0.5 * (w.dot(x)-y).abs() * s
     return closure
 
 def batchLoss(w, N):
