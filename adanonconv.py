@@ -69,8 +69,8 @@ class MetaLROptimizer(Optimizer):
                 state['step'] = 0
                 state['last_grad'] = p.data.new().resize_as_(p.data).zero_()
                 state['last_loss'] = 0
-                state['eta_optimizer'] = oloalgs.parabolic_bounded_optimizer()
-                # state['eta_optimizer'] = oloalgs.ONSCoinBetting1D(positive_only=True, domain = [0.000001, 10000])
+                # state['eta_optimizer'] = oloalgs.parabolic_bounded_optimizer()
+                state['eta_optimizer'] = oloalgs.ONSCoinBetting1D(positive_only=True, domain = [0.000001, 10000])
                 state['offset'] = EPSILON
                 state['eta_grad_lin_part'] = 0
                 state['do_update'] = True
@@ -105,6 +105,7 @@ class MetaLROptimizer(Optimizer):
 
                 state['step'] += 1
                 state['current_grad'] = grad
+                state['last_offset'] = state['offset']
 
 
                 if(self.do_update):
@@ -126,16 +127,18 @@ class MetaLROptimizer(Optimizer):
                     state['eta_grad_lin_part'] = -grad_product/state['lr_scaling']#np.sqrt(state['grad_squared_sum'])
                     eta_grad_quad_part_est = 0.5 * state['L'] * state['last_grad'].norm(2)**2/state['lr_scaling']**2
 
-                    eta_grad_est = np.array([state['eta_grad_lin_part'],eta_grad_quad_part_est])
+                    # eta_grad_est = np.array([state['eta_grad_lin_part'],eta_grad_quad_part_est])
+                    eta_grad_est = state['eta_grad_lin_part'] + 2 * state['eta'] * eta_grad_quad_part_est
 
-                    state['eta_optimizer'].hint(eta_grad_est)
+                    # state['eta_optimizer'].hint(eta_grad_est)
 
-                    eta = state['eta_optimizer'].get_prediction()[0]
+                    eta = state['eta_optimizer'].get_prediction()
                     state['eta'] = eta
 
                     # print('using eta: ',eta)
 
                     state['offset'] = -state['last_grad']/state['lr_scaling'] *eta
+                     # + state['last_offset'] * momentum
                     p.data += state['offset']
 
                     # print('grad: ',state['last_grad'])
@@ -175,8 +178,8 @@ class MetaLROptimizer(Optimizer):
 
                     eta_grad_quad_part = 0.5 * Lt * state['last_grad'].norm(2)**2/state['lr_scaling']**2
 
-                    # eta_grad = state['eta_grad_lin_part'] + 2 * eta *eta_grad_quad_part
-                    eta_grad = np.array([state['eta_grad_lin_part'], eta_grad_quad_part])
+                    eta_grad = state['eta_grad_lin_part'] + 2 * eta *eta_grad_quad_part
+                    # eta_grad = np.array([state['eta_grad_lin_part'], eta_grad_quad_part])
 
                     # print('eta grad lin part: ', state['eta_grad_lin_part'])
                     # print('eta grad quad part: ', eta_grad_quad_part)
