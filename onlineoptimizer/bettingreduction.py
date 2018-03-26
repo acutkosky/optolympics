@@ -240,8 +240,6 @@ class BettingReductionSphere(Optimizer):
 
                 state['average_iterate_unweighted'] = \
                     state['average_iterate_unweighted'] + (unshifted_prediction - state['average_iterate_unweighted']) / (state['step'] + 1)
-                print("wealth: ",state['wealth'])
-                print("maximum_gradient", state['maximum_gradient'])
 
 
         return loss
