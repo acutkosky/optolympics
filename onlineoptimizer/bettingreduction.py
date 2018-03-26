@@ -36,8 +36,8 @@ class BettingReduction(Optimizer):
                 state['step'] = 0
                 state['maximum_gradient'] = p.data.new().resize_as_(p.data).fill_(maximum_gradient)
                 state['ons_sum_gradient_squared'] = p.data.new().resize_as_(p.data).fill_(1.0)
-                state['average_iterate_unweighted'] = p.data.clone()
-                state['average_iterate_grad_weighted'] = p.data.clone()
+                state['average_iterate_unweighted'] = p.data.new().resize_as_(p.data).fill_(0)
+                state['average_iterate_grad_weighted'] = p.data.new().resize_as_(p.data).fill_(0)
                 state['sum_gradient_squared'] = p.data.new().resize_as_(p.data).fill_(maximum_gradient**2)
                 state['bet'] = p.data.new().resize_as_(p.data).fill_(0)
                 state['center'] = p.data.clone()
@@ -91,26 +91,28 @@ class BettingReduction(Optimizer):
 
 
                 #perform ONS update on betting fraction
-                state['bet'] -= self.ons_lr *\
-                                ons_grad/state['ons_sum_gradient_squared'] 
+                state['bet'] -= ons_grad/state['ons_sum_gradient_squared'] * self.ons_lr
+                                
                 #same efficiency issue here
                 state['bet'] = element_wise_clip(state['bet'],
                                         -0.5/state['maximum_gradient'],
                                          0.5/state['maximum_gradient'])
 
+
                 #prediction comes from betting fraction, offset by
                 #average weighted iterate ('momentum term')
                 p.data = state['center'] + state['wealth'] * state['bet'] +\
                                 state['average_iterate_grad_weighted']
+                unshifted_prediction = p.data - state['center']
 
                 state['average_iterate_grad_weighted'] = \
                     state['average_iterate_grad_weighted'] +\
-                    (p.data - state['average_iterate_grad_weighted']) *\
+                    (unshifted_prediction - state['average_iterate_grad_weighted']) *\
                     (regularized_grad**2)/state['sum_gradient_squared']
 
                 state['average_iterate_unweighted'] = \
                     state['average_iterate_unweighted'] +\
-                    (p.data - state['average_iterate_unweighted']) / \
+                    (unshifted_prediction - state['average_iterate_unweighted']) / \
                     (state['step'] + 1)
 
         return loss
@@ -226,22 +228,18 @@ class BettingReductionSphere(Optimizer):
                                          0.5/state['maximum_gradient'])
 
                 state['1d_prediction'] = state['wealth'] * state['bet']
-
                 #prediction comes from betting fraction, offset by
                 #average weighted iterate ('momentum term')
-                p.data = state['center'] + state['1d_prediction'] * \
-                                direction + \
-                                state['average_iterate_grad_weighted']
+                p.data = state['center'] + direction * state['1d_prediction'] + state['average_iterate_grad_weighted']
+                unshifted_prediction = p.data - state['center']
 
                 state['average_iterate_grad_weighted'] = \
                     state['average_iterate_grad_weighted'] +\
-                    (p.data - state['average_iterate_grad_weighted']) *\
+                    (unshifted_prediction - state['average_iterate_grad_weighted']) *\
                     (grad_norm**2)/state['sum_gradient_squared']
 
                 state['average_iterate_unweighted'] = \
-                    state['average_iterate_unweighted'] +\
-                    (p.data - state['average_iterate_unweighted']) / \
-                    (state['step'] + 1)
+                    state['average_iterate_unweighted'] + (unshifted_prediction - state['average_iterate_unweighted']) / (state['step'] + 1)
                 print("wealth: ",state['wealth'])
                 print("maximum_gradient", state['maximum_gradient'])
 
